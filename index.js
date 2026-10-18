@@ -37,72 +37,8 @@ const clientHeaders = {
 };
 
 // -------------------------------------------------------------
-// Favorites (in-memory)
-// -------------------------------------------------------------
-const DEFAULT_FAVORITES = [];
-
-// In-memory favorites (nothing saved to disk)
-let favorites = DEFAULT_FAVORITES.slice();
-
-const isFavorite = (slug) => favorites.some((f) => f.slug.toLowerCase() === slug.toLowerCase());
-
-// Returns true if the channel is now a favorite, false if it was removed
-function toggleFavorite(slug, name) {
-  const idx = favorites.findIndex((f) => f.slug.toLowerCase() === slug.toLowerCase());
-  if (idx >= 0) {
-    favorites.splice(idx, 1);
-    return false;
-  }
-  favorites.push({ slug, name: name || slug });
-  return true;
-}
-
-function favToggleUrl(slug) {
-  return `${HOST_URL}/fav/toggle?slug=${encodeURIComponent(slug)}${
-    FAV_KEY ? `&key=${encodeURIComponent(FAV_KEY)}` : ""
-  }`;
-}
-
-// A "stream" entry that opens the toggle page in the browser
-function favStream(slug, displayName) {
-  const nice = displayName || slug;
-  return isFavorite(slug)
-    ? { title: `⭐ Remove ${nice} from favorites (opens browser)`, externalUrl: favToggleUrl(slug) }
-    : { title: `☆ Add ${nice} to favorites (opens browser)`, externalUrl: favToggleUrl(slug) };
-}
-
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-app.get("/fav/toggle", async (req, res) => {
-  const slug = cleanSlug(req.query.slug);
-  if (FAV_KEY && req.query.key !== FAV_KEY) return res.status(403).send("Forbidden.");
-  if (!slug) return res.status(400).send("Missing channel.");
-
-  const st = await getChannelStatus(slug);
-  const nowFav = toggleFavorite(slug, st.username);
-  statusCache.delete(slug);
-
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.send(`<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Favorites</title>
-<style>
-  body{font-family:system-ui,sans-serif;background:#0b0e0f;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}
-  .card{padding:32px;border-radius:16px;background:#16191b;max-width:360px}
-  h1{font-size:44px;margin:0 0 8px} p{margin:6px 0;color:#c9d1d3} a{color:#53fc18}
-</style></head><body><div class="card">
-<h1>${nowFav ? "⭐" : "❌"}</h1>
-<p><b>${escapeHtml(st.username)}</b> ${nowFav ? "was added to" : "was removed from"} your favorites.</p>
-<p>You can close this tab and go back to Stremio.<br>Refresh the catalog to see the change.</p>
-<p><a href="${escapeHtml(toggleLink(slug))}">Undo</a></p>
-</div></body></html>`);
-});
-
-function toggleLink(slug) {
-  return `/fav/toggle?slug=${encodeURIComponent(slug)}${FAV_KEY ? `&key=${encodeURIComponent(FAV_KEY)}` : ""}`;
-}
 
 // -------------------------------------------------------------
 // Proxy security + caches
@@ -397,8 +333,8 @@ async function resolveVodUrl(vod) {
 // Catalog builder
 // -------------------------------------------------------------
 // idPrefix is always "kick" (opens the channel page)
-// onlyFavorites: true for the Favorites catalog
-async function buildCatalog(idPrefix, extra, onlyFavorites = false) {
+// Only the given extra.search slug, or top live channels when no search query.
+async function buildCatalog(idPrefix, extra) {
   if (extra && extra.search) {
     const slug = cleanSlug(extra.search);
     if (!slug) return [];
@@ -407,7 +343,7 @@ async function buildCatalog(idPrefix, extra, onlyFavorites = false) {
       {
         id: `${idPrefix}:${slug}`,
         type: "kick",
-        name: `${isFavorite(slug) ? "⭐ " : ""}${st.isLive ? "🔴" : "❌"} ${st.username}`,
+        name: `${st.isLive ? "🔴" : "❌"} ${st.username}`,
         poster: st.profilePic,
         posterShape: "poster",
         description: st.isLive
@@ -417,40 +353,15 @@ async function buildCatalog(idPrefix, extra, onlyFavorites = false) {
     ];
   }
 
-  const streams = onlyFavorites ? [] : await getAtLeast100Livestreams();
-  const liveSlugs = new Set(streams.map((s) => s.slug.toLowerCase()));
-
-  const pinned = await Promise.all(
-    favorites.map(async (f) => {
-      const st = await getChannelStatus(f.slug);
-      const isLive = liveSlugs.has(f.slug.toLowerCase()) || st.isLive;
-      return {
-        id: `${idPrefix}:${f.slug}`,
-        type: "kick",
-        name: `⭐ ${isLive ? "🔴" : "❌"} ${f.name || st.username}`,
-        poster: st.profilePic,
-        posterShape: "poster",
-        description: isLive
-          ? `🔴 LIVE NOW: ${st.title}\nViewers: ${Number(st.viewers).toLocaleString()}`
-          : "❌ Currently Offline"
-      };
-    })
-  );
-
-  if (onlyFavorites) return pinned;
-
-  const others = streams
-    .filter((s) => !isFavorite(s.slug))
-    .map((s) => ({
-      id: `${idPrefix}:${s.slug}`,
-      type: "kick",
-      name: `🔴 ${s.username}`,
-      poster: s.poster,
-      posterShape: "poster",
-      description: `${s.title}\nCategory: ${s.category} | Viewers: ${Number(s.viewers).toLocaleString()}`
-    }));
-
-  return [...pinned, ...others];
+  const streams = await getAtLeast100Livestreams();
+  return streams.map((s) => ({
+    id: `${idPrefix}:${s.slug}`,
+    type: "kick",
+    name: `🔴 ${s.username}`,
+    poster: s.poster,
+    posterShape: "poster",
+    description: `${s.title}\nCategory: ${s.category} | Viewers: ${Number(s.viewers).toLocaleString()}`
+  }));
 }
 
 // Build a catalog containing only the given slugs (used by /streamers=...manifest.json)
@@ -476,22 +387,20 @@ async function buildCatalogBySlugs(idPrefix, slugs) {
 // -------------------------------------------------------------
 // Manifest Setup
 // -------------------------------------------------------------
-// Custom type "kick" with two catalogs. Every channel opens the same page:
-// a list with a favorite toggle, a LIVE NOW entry (when live) and seekable VODs.
-//   Channels  -> favorites + currently live channels (+ search)
-//   Favorites -> your saved channels
+// Custom type "kick" with one catalog (live channels). Every channel opens the same page:
+// a LIVE NOW entry (when live) and seekable VODs.
+//   Channels -> top live Kick streams (+ search)
 const manifest = {
   id: "kick.streams",
   version: "1.0.0",
   name: "Kick Streams & Videos",
-  description: "Watch Kick livestreams and seekable past VODs, with favorites",
+  description: "Watch Kick livestreams and seekable past VODs",
   logo: "https://kick.com/favicon.ico",
   resources: ["catalog", "stream", "meta"],
   types: ["kick"],
-  idPrefixes: ["kick:", "kicklive:", "kickvod:", "kickfav:"],
+  idPrefixes: ["kick:", "kicklive:", "kickvod:"],
   catalogs: [
-    { type: "kick", id: "kick_channels", name: "Channels", extra: [{ name: "search", isRequired: false }] },
-    { type: "kick", id: "kick_favorites", name: "Favorites" }
+    { type: "kick", id: "kick_channels", name: "Channels", extra: [{ name: "search", isRequired: false }] }
   ]
 };
 
@@ -501,9 +410,9 @@ const builder = new addonBuilder(manifest);
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
   if (type !== "kick") return { metas: [] };
   if (id === "kick_channels") return { metas: await buildCatalog("kick", extra) };
-  if (id === "kick_favorites") return { metas: await buildCatalog("kick", null, true) };
+  // Per-user manifest: /streamers=a,b.catalog -> only those channels
   if (id.startsWith("kick_favorites:")) {
-    const slugs = id.slice("kick_favorites:".length).split(",");
+    const slugs = id.slice("kick_favorites:".length).split(",").filter(Boolean);
     return { metas: await buildCatalogBySlugs("kick", slugs) };
   }
   return { metas: [] };
@@ -513,20 +422,13 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
 builder.defineMetaHandler(async ({ type, id }) => {
   if (type !== "kick") return { meta: null };
 
-  // Channel page: favorite toggle, LIVE NOW (if live) and VOD episode list
+  // Channel page: LIVE NOW (if live) and seekable VODs
   if (id.startsWith("kick:")) {
     const slug = id.slice("kick:".length);
     const [st, vods] = await Promise.all([getChannelStatus(slug), getVodList(slug)]);
 
     const now = new Date().toISOString();
     const videos = [];
-
-    // Favorite toggle entry
-    videos.push({
-      id: `kickfav:${slug}`,
-      title: isFavorite(slug) ? "⭐ Remove from favorites" : "☆ Add to favorites",
-      released: now
-    });
 
     if (st.isLive && st.playbackUrl) {
       videos.push({
@@ -551,7 +453,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
       meta: {
         id,
         type: "kick",
-        name: `${isFavorite(slug) ? "⭐ " : ""}${st.username || slug}`,
+        name: `${st.username || slug}`,
         poster: st.profilePic,
         posterShape: "poster",
         description: vods.length
@@ -567,13 +469,6 @@ builder.defineMetaHandler(async ({ type, id }) => {
 
 // ---------------------------- Streams -----------------------------
 builder.defineStreamHandler(async ({ type, id }) => {
-  // Favorite toggle episode
-  if (id.startsWith("kickfav:")) {
-    const slug = id.slice("kickfav:".length);
-    const st = await getChannelStatus(slug);
-    return { streams: [favStream(slug, st.username)] };
-  }
-
   // Seekable VOD episode
   if (id.startsWith("kickvod:")) {
     const [, slug, vodId] = id.split(":");
@@ -655,7 +550,7 @@ app.get("/", (req, res) => {
 <body>
 <div class="max">
   <h1>⚙️ Configure Kick Streams</h1>
-  <p class="sub">Add as many Kick usernames as you need. They will appear in the <b>Favorites</b> catalog of the addon.</p>
+  <p class="sub">Add the Kick usernames you want. They are kept only in this page (not saved anywhere), then copy your personal manifest URL below.</p>
 
   <div class="card">
     <div class="input-group">
@@ -671,9 +566,7 @@ app.get("/", (req, res) => {
   <div class="card">
     <h3>✅ Added streamers</h3>
     <p class="sub" style="margin-bottom:10px">Click ⨉ to remove a streamer:</p>
-    <div class="added-list">
-      ${favorites.map(f => `<div class="added-item"><span class="added-name">${escapeHtml(f.name || f.slug)}</span><button class="added-remove" type="button" onclick="removeOne('${escapeHtml(f.slug)}')">⨉</button></div>`).join('') || '<div class="added-empty">No streamers added yet.</div>'}
-    </div>
+    <div class="added-list" id="addedList"></div>
   </div>
 
   <div class="card">
@@ -684,26 +577,46 @@ app.get("/", (req, res) => {
   </div>
 </div>
 <script>
-  const currentSlugs = JSON.parse('${JSON.stringify(favorites.map(f=>f.slug))}');
-  function updateUserManifest(){
-    const url = location.origin + "/streamers=" + currentSlugs.join(",") + ".manifest.json";
-    document.getElementById('userManifestUrl').innerHTML = '<a href="'+escapeHtml(url)+'" target="_blank">'+escapeHtml(url)+'</a>';
-  }
+  let currentSlugs = [];
+  function cleanSlugClient(s){return String(s||"").trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");}
   function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}
-  async function addOne(){
-    const el=document.getElementById('newSlug'); const s=el.value.trim();
+  function renderAdded(){
+    const list=document.getElementById('addedList');
+    if(!currentSlugs.length){
+      list.innerHTML='<div class="added-empty">No streamers added yet.</div>';
+      return;
+    }
+    list.innerHTML = currentSlugs.map(function(s){
+      return '<div class="added-item"><span class="added-name">'+escapeHtml(s)+'</span><button class="added-remove" type="button" onclick="removeOne(\''+escapeHtml(s)+'\')">⨉</button></div>';
+    }).join('');
+  }
+  function updateUserManifest(){
+    const box=document.getElementById('userManifestUrl');
+    if(!currentSlugs.length){
+      box.innerHTML='<span style="color:#94a3b8">Add at least one streamer to generate your URL.</span>';
+      return;
+    }
+    const url = location.origin + "/streamers=" + currentSlugs.join(",") + ".manifest.json";
+    box.innerHTML = '<a href="'+escapeHtml(url)+'" target="_blank">'+escapeHtml(url)+'</a>';
+  }
+  function addOne(){
+    const el=document.getElementById('newSlug'); const s=cleanSlugClient(el.value);
     if(!s)return;
     const msg=document.getElementById('msg');
-    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=add&slug='+encodeURIComponent(s)});
-    const j=await r.json();
-    msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
-    if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
+    if(currentSlugs.includes(s)){
+      msg.innerHTML='<div class="msg err">'+escapeHtml(s)+' is already added.</div>';
+      el.value=''; return;
+    }
+    currentSlugs.push(s);
+    renderAdded(); updateUserManifest();
+    msg.innerHTML='<div class="msg ok">Added '+escapeHtml(s)+'.</div>';
+    el.value='';
   }
-  async function removeOne(slug){
-    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=remove&slug='+encodeURIComponent(slug)});
-    const j=await r.json();
-    if(j.ok)location.reload();
+  function removeOne(slug){
+    currentSlugs = currentSlugs.filter(function(x){return x!==slug;});
+    renderAdded(); updateUserManifest();
   }
+  renderAdded();
   updateUserManifest();
   // -------------------------------------------------------------
   // Autocomplete: fetch Kick username + photo as you type
@@ -750,50 +663,6 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-app.post("/", async (req, res) => {
-  const { action, slug, slugs } = req.body;
-  let message = "Unknown action.";
-  let ok = false;
-
-  if (action === "add" && slug) {
-    const s = cleanSlug(slug);
-    if (!s) {
-      message = "Invalid username.";
-    } else if (isFavorite(s)) {
-      message = `${s} is already added.`;
-    } else {
-      favorites.push({ slug: s, name: s });
-      ok = true;
-      message = `Added ${s}.`;
-    }
-  } else if (action === "addbulk" && slugs) {
-    const parts = String(slugs).split(",").map(cleanSlug).filter(Boolean);
-    let added = 0;
-    for (const s of parts) {
-      if (!isFavorite(s)) {
-        favorites.push({ slug: s, name: s });
-        added++;
-      }
-    }
-    ok = added > 0;
-    message = added ? `Added ${added} username(s).` : "No new usernames added.";
-  } else if (action === "remove" && slug) {
-    const s = cleanSlug(slug);
-    const idx = favorites.findIndex((f) => f.slug.toLowerCase() === s.toLowerCase());
-    if (idx >= 0) {
-      favorites.splice(idx, 1);
-      ok = true;
-      message = `Removed ${s}.`;
-    } else {
-      message = `${s} not found.`;
-    }
-  } else {
-    message = "Missing username.";
-  }
-
-  res.json({ ok, message });
-});
-
 // -------------------------------------------------------------
 // User-specific manifest: /streamers=user1,user2,etc.manifest.json
 // Returns a manifest whose Favorites catalog shows only those users.
@@ -815,7 +684,7 @@ app.get("/streamers=:slugs.manifest.json", (req, res) => {
     description: "Watch Kick livestreams for your selected users",
     resources: ["catalog", "stream", "meta"],
     types: ["kick"],
-    idPrefixes: ["kick:", "kicklive:", "kickvod:", "kickfav:"],
+    idPrefixes: ["kick:", "kicklive:", "kickvod:"],
     catalogs: [
       { type: "kick", id: "kick_channels", name: "Channels", extra: [{ name: "search", isRequired: false }] },
       { type: "kick", id: `kick_favorites:${slugs.join(",")}`, name: "Favorites" }

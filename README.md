@@ -25,9 +25,15 @@ https://kick-streams-stremio.onrender.com/manifest.json
 - Search channels by username
 - Past recorded broadcasts (VODs)
 - Native CORS proxy for PS5 and browser playback
-- Add/remove favorite streamers from the config page (`/configure`)
+- Build a custom per-user manifest URL from the config page (browser-only, no server storage)
 - Addon logo uses Kick's favicon
 
 ### Configuration
 
-Visit the addon's configure page to add Kick usernames as favorites. Added streamers appear in a list where you can remove any one by clicking ⨉. No streamers are pre-loaded by default — add the ones you want.
+Open the addon's configure page, add the Kick usernames you want, then copy the generated per-user manifest URL. Nothing is saved on the server or in your browser — the selected streamers only exist in that page while you build the URL, and the URL itself carries the list:
+
+```
+https://kick-streams-stremio.onrender.com/streamers=user1,user2.manifest.json
+```
+
+A fresh visitor to the configure page always starts with an empty list.
