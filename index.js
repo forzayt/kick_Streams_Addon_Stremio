@@ -704,6 +704,7 @@ app.get("/streamers/:slugs/manifest.json", (req, res) => {
     version: "1.0.0",
     name: `Kick Streams - ${slugs.length} user(s)`,
     description: "Watch Kick livestreams for your selected users",
+    logo: "https://kick.com/favicon.ico",
     resources: ["catalog", "stream", "meta"],
     types: ["kick"],
     idPrefixes: ["kick:", "kicklive:", "kickvod:"],
