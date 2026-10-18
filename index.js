@@ -31,6 +31,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Body parsing for the configure form
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const clientHeaders = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -485,7 +489,7 @@ async function buildCatalog(idPrefix, extra, onlyFavorites = false) {
 //   Channels  -> favorites + currently live channels (+ search)
 //   Favorites -> your saved channels
 const manifest = {
-  id: "community.kick.live",
+  id: "kick.streams",
   version: "1.0.0",
   name: "Kick Streams & Videos",
   description: "Watch Kick livestreams and seekable past VODs, with favorites",
@@ -601,6 +605,162 @@ builder.defineStreamHandler(async ({ type, id }) => {
   }
 
   return { streams: [] };
+});
+
+// -------------------------------------------------------------
+// Configure page: manage Kick usernames stored in favorites.json
+// -------------------------------------------------------------
+app.get("/", (req, res) => {
+  const manifestUrl = `${HOST_URL}/manifest.json`;
+
+  const listItems = favorites
+    .map((f) => {
+      const slugAttr = String(f.slug).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      return `<li><span>${escapeHtml(f.slug)}</span> <button class="danger" onclick="removeOne('${slugAttr}')">Remove</button></li>`;
+    })
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configure Kick Streams Addon</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b0e0f;color:#fff;margin:0;padding:24px}
+  .max{max-width:720px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px;color:#53fc18}
+  p.sub{color:#c9d1d3;margin:0 0 22px}
+  .card{background:#16191b;border-radius:16px;padding:22px;margin-bottom:20px}
+  .input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  input[type="text"]{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
+  textarea{flex:1 1 100%;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
+  button{padding:10px 18px;border-radius:8px;border:none;background:#53fc18;color:#000;font-weight:700;cursor:pointer;font-size:14px}
+  button.secondary{background:#33414e;color:#fff}
+  button.danger{background:#ef4444;color:#fff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  ul{list-style:none;padding:0;margin:0}
+  li{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #33414e;border-radius:8px;margin-bottom:8px;background:#0f1417}
+  li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hint{color:#94a3b8;font-size:13px;margin-top:8px}
+  .urlbox{background:#0f1417;border:1px solid #33414e;border-radius:8px;padding:12px;margin-top:10px;word-break:break-all;font-size:13px}
+  .urlbox a{color:#53fc18;text-decoration:none}
+  .msg{margin:10px 0;padding:10px 12px;border-radius:8px;font-size:14px}
+  .msg.ok{background:#14532d;color:#bbf7d0;border:1px solid #16a34a}
+  .msg.err{background:#7f1d1d;color:#fecaca;border:1px solid #dc2626}
+  h3{font-size:17px;margin:24px 0 8px;color:#53fc18}
+</style>
+</head>
+<body>
+<div class="max">
+  <h1>⚙️ Configure Kick Streams</h1>
+  <p class="sub">Add as many Kick usernames as you need. They will appear in the <b>Favorites</b> catalog of the addon.</p>
+
+  <div class="card">
+    <div class="input-group">
+      <input type="text" id="newSlug" placeholder="kick username (e.g. xqc)" maxlength="60">
+      <button onclick="addOne()">Add</button>
+    </div>
+    <div class="input-group" style="margin-top:8px">
+      <textarea id="bulk" rows="3" placeholder="Paste multiple usernames, one per line or comma-separated"></textarea>
+    </div>
+    <div class="input-group">
+      <button onclick="addBulk()">Add multiple</button>
+      <button class="secondary" onclick="location.reload()">Reload list</button>
+    </div>
+    <div class="hint">Usernames are read from and saved to <code>favorites.json</code>. The catalog updates automatically.</div>
+    <div id="msg"></div>
+
+    <h3>Current usernames (${favorites.length})</h3>
+    <ul id="list">${listItems}</ul>
+  </div>
+
+  <div class="card">
+    <h3>Install / Copy manifest</h3>
+    <p class="sub" style="margin-bottom:8px">Copy this link into Stremio's add-on search bar to install:</p>
+    <div class="urlbox"><a href="${escapeHtml(manifestUrl)}" target="_blank">${escapeHtml(manifestUrl)}</a></div>
+    <p class="hint" style="margin-top:8px">The Favorites catalog reflects whatever usernames are in <code>favorites.json</code>.</p>
+  </div>
+</div>
+<script>
+  function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}
+  async function addOne(){
+    const el=document.getElementById('newSlug'); const s=el.value.trim();
+    if(!s)return;
+    const msg=document.getElementById('msg');
+    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=add&slug='+encodeURIComponent(s)});
+    const j=await r.json();
+    msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
+    if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
+  }
+  async function addBulk(){
+    const el=document.getElementById('bulk'); const raw=el.value;
+    const parts=raw.split(/[,\n]+/).map(x=>x.trim()).filter(Boolean);
+    if(!parts.length)return;
+    const msg=document.getElementById('msg');
+    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=addbulk&slugs='+encodeURIComponent(parts.join(','))});
+    const j=await r.json();
+    msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
+    if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
+  }
+  async function removeOne(slug){
+    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=remove&slug='+encodeURIComponent(slug)});
+    const j=await r.json();
+    const msg=document.getElementById('msg');
+    msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
+    if(j.ok)setTimeout(()=>location.reload(),400);
+  }
+</script>
+</body>
+</html>`;
+  res.send(html);
+});
+
+app.post("/", async (req, res) => {
+  const { action, slug, slugs } = req.body;
+  let message = "Unknown action.";
+  let ok = false;
+
+  if (action === "add" && slug) {
+    const s = cleanSlug(slug);
+    if (!s) {
+      message = "Invalid username.";
+    } else if (isFavorite(s)) {
+      message = `${s} is already added.`;
+    } else {
+      favorites.push({ slug: s, name: s });
+      saveFavorites();
+      ok = true;
+      message = `Added ${s}.`;
+    }
+  } else if (action === "addbulk" && slugs) {
+    const parts = String(slugs).split(",").map(cleanSlug).filter(Boolean);
+    let added = 0;
+    for (const s of parts) {
+      if (!isFavorite(s)) {
+        favorites.push({ slug: s, name: s });
+        added++;
+      }
+    }
+    if (added > 0) saveFavorites();
+    ok = added > 0;
+    message = added ? `Added ${added} username(s).` : "No new usernames added.";
+  } else if (action === "remove" && slug) {
+    const s = cleanSlug(slug);
+    const idx = favorites.findIndex((f) => f.slug.toLowerCase() === s.toLowerCase());
+    if (idx >= 0) {
+      favorites.splice(idx, 1);
+      saveFavorites();
+      ok = true;
+      message = `Removed ${s}.`;
+    } else {
+      message = `${s} not found.`;
+    }
+  } else {
+    message = "Missing username.";
+  }
+
+  res.json({ ok, message });
 });
 
 const addonRouter = getRouter(builder.getInterface());
