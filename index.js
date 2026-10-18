@@ -520,6 +520,8 @@ app.get("/", (req, res) => {
   input[type="text"]{flex:1;width:100%;box-sizing:border-box;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   textarea{flex:1 1 100%;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   button{padding:10px 18px;border-radius:8px;border:none;background:#53fc18;color:#000;font-weight:700;cursor:pointer;font-size:14px}
+  button.copy-btn{display:block;width:100%;margin-top:14px;padding:16px 20px;font-size:17px;border-radius:10px;box-sizing:border-box}
+  button.copy-btn:hover{background:#6dff3e}
   button.secondary{background:#33414e;color:#fff}
   button:disabled{opacity:.5;cursor:not-allowed}
   .suggestions{position:absolute;z-index:50;background:#16191b;border:1px solid #33414e;border-radius:8px;max-height:260px;overflow-y:auto;width:100%;top:100%;left:0;margin-top:4px;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
@@ -573,11 +575,13 @@ app.get("/", (req, res) => {
     <h3>Per-user manifest</h3>
     <p class="sub" style="margin-bottom:8px">Copy this link to install only your selected users:</p>
     <div class="urlbox" id="userManifestUrl"></div>
+    <button class="copy-btn" type="button" onclick="copyManifestUrl()">📋 Copy manifest URL</button>
     <p class="hint" style="margin-top:8px">URL format: <code>/streamers=user1,user2,etc.manifest.json</code></p>
   </div>
 </div>
 <script>
   let currentSlugs = [];
+  let manifestUrl = "";
   function cleanSlugClient(s){return String(s||"").trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");}
   function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}
   function renderAdded(){
@@ -593,11 +597,24 @@ app.get("/", (req, res) => {
   function updateUserManifest(){
     const box=document.getElementById('userManifestUrl');
     if(!currentSlugs.length){
+      manifestUrl = "";
       box.innerHTML='<span style="color:#94a3b8">Add at least one streamer to generate your URL.</span>';
       return;
     }
-    const url = location.origin + "/streamers=" + currentSlugs.join(",") + ".manifest.json";
-    box.innerHTML = '<a href="'+escapeHtml(url)+'" target="_blank">'+escapeHtml(url)+'</a>';
+    manifestUrl = location.origin + "/streamers=" + currentSlugs.join(",") + ".manifest.json";
+    box.innerHTML = '<a href="'+escapeHtml(manifestUrl)+'" target="_blank">'+escapeHtml(manifestUrl)+'</a>';
+  }
+  function copyManifestUrl(){
+    const msg=document.getElementById('msg');
+    if(!manifestUrl){
+      msg.innerHTML='<div class="msg err">Add at least one streamer first.</div>';
+      return;
+    }
+    navigator.clipboard.writeText(manifestUrl).then(function(){
+      msg.innerHTML='<div class="msg ok">Copied manifest URL to clipboard!</div>';
+    }).catch(function(){
+      msg.innerHTML='<div class="msg err">Copy failed — please select and copy the link manually.</div>';
+    });
   }
   function addOne(){
     const el=document.getElementById('newSlug'); const s=cleanSlugClient(el.value);
