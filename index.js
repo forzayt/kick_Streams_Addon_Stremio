@@ -1,7 +1,5 @@
 const express = require("express");
 const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
 const { addonBuilder, getRouter } = require("stremio-addon-sdk");
 
 const app = express();
@@ -16,10 +14,6 @@ const HOST_URL = (
 // Optional: set FAV_KEY to require ?key=... on the favorite toggle endpoint,
 // so strangers who find your server can't change your favorites.
 const FAV_KEY = process.env.FAV_KEY || "";
-
-// Where favorites.json is stored. On hosts with ephemeral disks, point this at a persistent volume.
-const DATA_DIR = process.env.DATA_DIR || __dirname;
-const FAV_FILE = path.join(DATA_DIR, "favorites.json");
 
 // Universal CORS headers for web clients and PS5 browser
 app.use((req, res, next) => {
@@ -43,7 +37,7 @@ const clientHeaders = {
 };
 
 // -------------------------------------------------------------
-// Favorites (persisted to favorites.json)
+// Favorites (in-memory)
 // -------------------------------------------------------------
 const DEFAULT_FAVORITES = [
   { slug: "achrafsabiri", name: "Achraf Sabiri" },
@@ -51,24 +45,8 @@ const DEFAULT_FAVORITES = [
   { slug: "adinross", name: "Adin Ross" }
 ];
 
-function loadFavorites() {
-  try {
-    const data = JSON.parse(fs.readFileSync(FAV_FILE, "utf-8"));
-    if (Array.isArray(data)) return data.filter((f) => f && f.slug);
-  } catch {}
-  return DEFAULT_FAVORITES.slice();
-}
-
-function saveFavorites() {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FAV_FILE, JSON.stringify(favorites, null, 2));
-  } catch (err) {
-    console.warn("[Favorites] Could not save:", err.message);
-  }
-}
-
-let favorites = loadFavorites();
+// In-memory favorites (nothing saved to disk)
+let favorites = DEFAULT_FAVORITES.slice();
 
 const isFavorite = (slug) => favorites.some((f) => f.slug.toLowerCase() === slug.toLowerCase());
 
@@ -77,11 +55,9 @@ function toggleFavorite(slug, name) {
   const idx = favorites.findIndex((f) => f.slug.toLowerCase() === slug.toLowerCase());
   if (idx >= 0) {
     favorites.splice(idx, 1);
-    saveFavorites();
     return false;
   }
   favorites.push({ slug, name: name || slug });
-  saveFavorites();
   return true;
 }
 
@@ -481,6 +457,26 @@ async function buildCatalog(idPrefix, extra, onlyFavorites = false) {
   return [...pinned, ...others];
 }
 
+// Build a catalog containing only the given slugs (used by /streamers=...manifest.json)
+async function buildCatalogBySlugs(idPrefix, slugs) {
+  const pinned = await Promise.all(
+    slugs.map(async (slug) => {
+      const st = await getChannelStatus(slug);
+      return {
+        id: `${idPrefix}:${slug}`,
+        type: "kick",
+        name: `${st.isLive ? "🔴" : "❌"} ${st.username}`,
+        poster: st.profilePic,
+        posterShape: "poster",
+        description: st.isLive
+          ? `🔴 LIVE NOW: ${st.title}\nViewers: ${Number(st.viewers).toLocaleString()}`
+          : "❌ Currently Offline"
+      };
+    })
+  );
+  return pinned;
+}
+
 // -------------------------------------------------------------
 // Manifest Setup
 // -------------------------------------------------------------
@@ -509,6 +505,10 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
   if (type !== "kick") return { metas: [] };
   if (id === "kick_channels") return { metas: await buildCatalog("kick", extra) };
   if (id === "kick_favorites") return { metas: await buildCatalog("kick", null, true) };
+  if (id.startsWith("kick_favorites:")) {
+    const slugs = id.slice("kick_favorites:".length).split(",");
+    return { metas: await buildCatalogBySlugs("kick", slugs) };
+  }
   return { metas: [] };
 });
 
@@ -608,18 +608,9 @@ builder.defineStreamHandler(async ({ type, id }) => {
 });
 
 // -------------------------------------------------------------
-// Configure page: manage Kick usernames stored in favorites.json
+// Configure page: manage Kick usernames (in-memory)
 // -------------------------------------------------------------
 app.get("/", (req, res) => {
-  const manifestUrl = `${HOST_URL}/manifest.json`;
-
-  const listItems = favorites
-    .map((f) => {
-      const slugAttr = String(f.slug).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      return `<li><span>${escapeHtml(f.slug)}</span> <button class="danger" onclick="removeOne('${slugAttr}')">Remove</button></li>`;
-    })
-    .join("");
-
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -637,7 +628,6 @@ app.get("/", (req, res) => {
   textarea{flex:1 1 100%;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   button{padding:10px 18px;border-radius:8px;border:none;background:#53fc18;color:#000;font-weight:700;cursor:pointer;font-size:14px}
   button.secondary{background:#33414e;color:#fff}
-  button.danger{background:#ef4444;color:#fff}
   button:disabled{opacity:.5;cursor:not-allowed}
   ul{list-style:none;padding:0;margin:0}
   li{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #33414e;border-radius:8px;margin-bottom:8px;background:#0f1417}
@@ -668,21 +658,23 @@ app.get("/", (req, res) => {
       <button onclick="addBulk()">Add multiple</button>
       <button class="secondary" onclick="location.reload()">Reload list</button>
     </div>
-    <div class="hint">Usernames are read from and saved to <code>favorites.json</code>. The catalog updates automatically.</div>
+    <div class="hint">Usernames are kept in memory while the addon runs. The catalog updates automatically.</div>
     <div id="msg"></div>
-
-    <h3>Current usernames (${favorites.length})</h3>
-    <ul id="list">${listItems}</ul>
   </div>
 
   <div class="card">
-    <h3>Install / Copy manifest</h3>
-    <p class="sub" style="margin-bottom:8px">Copy this link into Stremio's add-on search bar to install:</p>
-    <div class="urlbox"><a href="${escapeHtml(manifestUrl)}" target="_blank">${escapeHtml(manifestUrl)}</a></div>
-    <p class="hint" style="margin-top:8px">The Favorites catalog reflects whatever usernames are in <code>favorites.json</code>.</p>
+    <h3>Per-user manifest</h3>
+    <p class="sub" style="margin-bottom:8px">Copy this link to install only your selected users:</p>
+    <div class="urlbox" id="userManifestUrl"></div>
+    <p class="hint" style="margin-top:8px">URL format: <code>/streamers=user1,user2,etc.manifest.json</code></p>
   </div>
 </div>
 <script>
+  const currentSlugs = JSON.parse('${JSON.stringify(favorites.map(f=>f.slug))}');
+  function updateUserManifest(){
+    const url = location.origin + "/streamers=" + currentSlugs.join(",") + ".manifest.json";
+    document.getElementById('userManifestUrl').innerHTML = '<a href="'+escapeHtml(url)+'" target="_blank">'+escapeHtml(url)+'</a>';
+  }
   function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}
   async function addOne(){
     const el=document.getElementById('newSlug'); const s=el.value.trim();
@@ -703,13 +695,7 @@ app.get("/", (req, res) => {
     msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
     if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
   }
-  async function removeOne(slug){
-    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=remove&slug='+encodeURIComponent(slug)});
-    const j=await r.json();
-    const msg=document.getElementById('msg');
-    msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
-    if(j.ok)setTimeout(()=>location.reload(),400);
-  }
+  updateUserManifest();
 </script>
 </body>
 </html>`;
@@ -729,7 +715,6 @@ app.post("/", async (req, res) => {
       message = `${s} is already added.`;
     } else {
       favorites.push({ slug: s, name: s });
-      saveFavorites();
       ok = true;
       message = `Added ${s}.`;
     }
@@ -742,7 +727,6 @@ app.post("/", async (req, res) => {
         added++;
       }
     }
-    if (added > 0) saveFavorites();
     ok = added > 0;
     message = added ? `Added ${added} username(s).` : "No new usernames added.";
   } else if (action === "remove" && slug) {
@@ -750,7 +734,6 @@ app.post("/", async (req, res) => {
     const idx = favorites.findIndex((f) => f.slug.toLowerCase() === s.toLowerCase());
     if (idx >= 0) {
       favorites.splice(idx, 1);
-      saveFavorites();
       ok = true;
       message = `Removed ${s}.`;
     } else {
@@ -761,6 +744,37 @@ app.post("/", async (req, res) => {
   }
 
   res.json({ ok, message });
+});
+
+// -------------------------------------------------------------
+// User-specific manifest: /streamers=user1,user2,etc.manifest.json
+// Returns a manifest whose Favorites catalog shows only those users.
+// -------------------------------------------------------------
+app.get("/streamers=:slugs.manifest.json", (req, res) => {
+  const slugs = String(req.params.slugs)
+    .split(/,/)
+    .map(cleanSlug)
+    .filter(Boolean);
+
+  if (slugs.length === 0) {
+    return res.status(400).json({ error: "Provide /streamers=user1,user2,etc.manifest.json" });
+  }
+
+  const userManifest = {
+    id: `community.kick.live.user.${slugs.join(",")}`,
+    version: "1.0.0",
+    name: `Kick Streams - ${slugs.length} user(s)`,
+    description: "Watch Kick livestreams for your selected users",
+    resources: ["catalog", "stream", "meta"],
+    types: ["kick"],
+    idPrefixes: ["kick:", "kicklive:", "kickvod:", "kickfav:"],
+    catalogs: [
+      { type: "kick", id: "kick_channels", name: "Channels", extra: [{ name: "search", isRequired: false }] },
+      { type: "kick", id: `kick_favorites:${slugs.join(",")}`, name: "Favorites" }
+    ]
+  };
+
+  res.json(userManifest);
 });
 
 const addonRouter = getRouter(builder.getInterface());
