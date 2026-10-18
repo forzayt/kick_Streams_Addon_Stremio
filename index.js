@@ -718,6 +718,9 @@ app.get("/streamers/:slugs/manifest.json", (req, res) => {
 
 const addonRouter = getRouter(builder.getInterface());
 app.use(addonRouter);
+// Also serve SDK routes under the per-user manifest base so Stremio can resolve
+// catalog/stream/meta URLs relative to /streamers/:slugs/manifest.json.
+app.use("/streamers/:slugs", addonRouter);
 
 process.on("unhandledRejection", (reason) => {
   console.warn("[Addon Warning] Caught unhandled rejection:", reason);
