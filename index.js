@@ -39,11 +39,7 @@ const clientHeaders = {
 // -------------------------------------------------------------
 // Favorites (in-memory)
 // -------------------------------------------------------------
-const DEFAULT_FAVORITES = [
-  { slug: "achrafsabiri", name: "Achraf Sabiri" },
-  { slug: "xqc", name: "xQc" },
-  { slug: "adinross", name: "Adin Ross" }
-];
+const DEFAULT_FAVORITES = [];
 
 // In-memory favorites (nothing saved to disk)
 let favorites = DEFAULT_FAVORITES.slice();
