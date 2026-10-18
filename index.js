@@ -621,7 +621,7 @@ app.get("/", (req, res) => {
   .card{background:#16191b;border-radius:16px;padding:22px;margin-bottom:20px}
   .input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
   .input-wrap{position:relative;flex:1}
-  input[type="text"]{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
+  input[type="text"]{flex:1;width:100%;box-sizing:border-box;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   textarea{flex:1 1 100%;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   button{padding:10px 18px;border-radius:8px;border:none;background:#53fc18;color:#000;font-weight:700;cursor:pointer;font-size:14px}
   button.secondary{background:#33414e;color:#fff}
