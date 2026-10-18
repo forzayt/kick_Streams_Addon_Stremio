@@ -591,7 +591,7 @@ app.get("/", (req, res) => {
       return;
     }
     list.innerHTML = currentSlugs.map(function(s){
-      return '<div class="added-item"><span class="added-name">'+escapeHtml(s)+'</span><button class="added-remove" type="button" onclick="removeOne(\''+escapeHtml(s)+'\')">⨉</button></div>';
+      return '<div class="added-item"><span class="added-name">'+escapeHtml(s)+'</span><button class="added-remove" type="button" data-slug="'+escapeHtml(s)+'">⨉</button></div>';
     }).join('');
   }
   function updateUserManifest(){
@@ -633,6 +633,11 @@ app.get("/", (req, res) => {
     currentSlugs = currentSlugs.filter(function(x){return x!==slug;});
     renderAdded(); updateUserManifest();
   }
+  document.getElementById('addedList').addEventListener('click', function(e){
+    if(!e.target || !e.target.closest) return;
+    var btn = e.target.closest('[data-slug]');
+    if(btn) removeOne(btn.getAttribute('data-slug'));
+  });
   renderAdded();
   updateUserManifest();
   // -------------------------------------------------------------
