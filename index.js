@@ -485,6 +485,7 @@ const manifest = {
   version: "1.0.0",
   name: "Kick Streams & Videos",
   description: "Watch Kick livestreams and seekable past VODs, with favorites",
+  logo: "https://kick.com/favicon.ico",
   resources: ["catalog", "stream", "meta"],
   types: ["kick"],
   idPrefixes: ["kick:", "kicklive:", "kickvod:", "kickfav:"],
