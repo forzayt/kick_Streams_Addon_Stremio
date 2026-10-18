@@ -623,13 +623,14 @@ app.get("/", (req, res) => {
   h1{font-size:26px;margin:0 0 6px;color:#53fc18}
   p.sub{color:#c9d1d3;margin:0 0 22px}
   .card{background:#16191b;border-radius:16px;padding:22px;margin-bottom:20px}
-  .input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;position:relative}
+  .input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .input-wrap{position:relative;flex:1}
   input[type="text"]{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   textarea{flex:1 1 100%;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   button{padding:10px 18px;border-radius:8px;border:none;background:#53fc18;color:#000;font-weight:700;cursor:pointer;font-size:14px}
   button.secondary{background:#33414e;color:#fff}
   button:disabled{opacity:.5;cursor:not-allowed}
-  .suggestions{position:absolute;z-index:50;background:#16191b;border:1px solid #33414e;border-radius:8px;max-height:260px;overflow-y:auto;width:min(320px,100%);margin-top:6px;display:none}
+  .suggestions{position:absolute;z-index:50;background:#16191b;border:1px solid #33414e;border-radius:8px;max-height:260px;overflow-y:auto;width:100%;top:100%;left:0;margin-top:4px;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
   .suggestion{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid #33414e;cursor:pointer}
   .suggestion:last-child{border-bottom:none}
   .suggestion:hover{background:#1f2529}
@@ -655,8 +656,10 @@ app.get("/", (req, res) => {
 
   <div class="card">
     <div class="input-group">
-      <input type="text" id="newSlug" placeholder="kick username (e.g. xqc)" maxlength="60" autocomplete="off">
-      <div id="suggestions" class="suggestions"></div>
+      <div class="input-wrap">
+        <input type="text" id="newSlug" placeholder="kick username (e.g. xqc)" maxlength="60" autocomplete="off">
+        <div id="suggestions" class="suggestions"></div>
+      </div>
       <button onclick="addOne()">Add</button>
     </div>
     <div id="msg"></div>
