@@ -623,12 +623,19 @@ app.get("/", (req, res) => {
   h1{font-size:26px;margin:0 0 6px;color:#53fc18}
   p.sub{color:#c9d1d3;margin:0 0 22px}
   .card{background:#16191b;border-radius:16px;padding:22px;margin-bottom:20px}
-  .input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .input-group{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;position:relative}
   input[type="text"]{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   textarea{flex:1 1 100%;padding:10px 14px;border-radius:8px;border:1px solid #33414e;background:#0f1417;color:#fff;font-size:14px}
   button{padding:10px 18px;border-radius:8px;border:none;background:#53fc18;color:#000;font-weight:700;cursor:pointer;font-size:14px}
   button.secondary{background:#33414e;color:#fff}
   button:disabled{opacity:.5;cursor:not-allowed}
+  .suggestions{position:absolute;z-index:50;background:#16191b;border:1px solid #33414e;border-radius:8px;max-height:260px;overflow-y:auto;width:min(320px,100%);margin-top:6px;display:none}
+  .suggestion{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid #33414e;cursor:pointer}
+  .suggestion:last-child{border-bottom:none}
+  .suggestion:hover{background:#1f2529}
+  .suggestion img{width:32px;height:32px;border-radius:50%;margin-right:10px;background:#0f1417;border:1px solid #33414e}
+  .suggestion .name{font-weight:600;color:#fff}
+  .suggestion .live{color:#53fc18;font-size:12px;margin-left:auto}
   ul{list-style:none;padding:0;margin:0}
   li{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #33414e;border-radius:8px;margin-bottom:8px;background:#0f1417}
   li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -648,17 +655,10 @@ app.get("/", (req, res) => {
 
   <div class="card">
     <div class="input-group">
-      <input type="text" id="newSlug" placeholder="kick username (e.g. xqc)" maxlength="60">
+      <input type="text" id="newSlug" placeholder="kick username (e.g. xqc)" maxlength="60" autocomplete="off">
+      <div id="suggestions" class="suggestions"></div>
       <button onclick="addOne()">Add</button>
     </div>
-    <div class="input-group" style="margin-top:8px">
-      <textarea id="bulk" rows="3" placeholder="Paste multiple usernames, one per line or comma-separated"></textarea>
-    </div>
-    <div class="input-group">
-      <button onclick="addBulk()">Add multiple</button>
-      <button class="secondary" onclick="location.reload()">Reload list</button>
-    </div>
-    <div class="hint">Usernames are kept in memory while the addon runs. The catalog updates automatically.</div>
     <div id="msg"></div>
   </div>
 
@@ -685,17 +685,46 @@ app.get("/", (req, res) => {
     msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
     if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
   }
-  async function addBulk(){
-    const el=document.getElementById('bulk'); const raw=el.value;
-    const parts=raw.split(/[,\n]+/).map(x=>x.trim()).filter(Boolean);
-    if(!parts.length)return;
-    const msg=document.getElementById('msg');
-    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=addbulk&slugs='+encodeURIComponent(parts.join(','))});
-    const j=await r.json();
-    msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
-    if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
-  }
   updateUserManifest();
+  // -------------------------------------------------------------
+  // Autocomplete: fetch Kick username + photo as you type
+  // -------------------------------------------------------------
+  const input = document.getElementById('newSlug');
+  const suggestions = document.getElementById('suggestions');
+  let debounceTimer = null;
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (debounceTimer) clearTimeout(debounceTimer);
+    suggestions.innerHTML = '';
+    suggestions.style.display = 'none';
+    if (!q) return;
+    debounceTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(\`https://kick.com/api/v1/channels/\${encodeURIComponent(q)}\`, {
+          headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://kick.com/' }
+        });
+        const d = await r.json();
+        if (d?.user?.username) {
+          const isLive = Boolean(d?.livestream?.is_live);
+          const pic = d?.user?.profile_pic || 'https://kick.com/favicon.ico';
+          const el = document.createElement('div');
+          el.className = 'suggestion';
+          el.innerHTML = \`<img src="\${escapeHtml(pic)}" alt=""><div class="name">\${escapeHtml(d.user.username)}</div><div class="live">\${isLive ? '🔴 LIVE' : ''}</div>\`;
+          el.onclick = () => { input.value = d.user.username; suggestions.innerHTML = ''; suggestions.style.display = 'none'; };
+          suggestions.appendChild(el);
+          suggestions.style.display = 'block';
+        }
+      } catch {}
+    }, 300);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+      suggestions.innerHTML = '';
+      suggestions.style.display = 'none';
+    }
+  });
 </script>
 </body>
 </html>`;
