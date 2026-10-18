@@ -33,7 +33,7 @@ https://kick-streams-stremio.onrender.com/manifest.json
 Open the addon's configure page, add the Kick usernames you want, then copy the generated per-user manifest URL. Nothing is saved on the server or in your browser — the selected streamers only exist in that page while you build the URL, and the URL itself carries the list:
 
 ```
-https://kick-streams-stremio.onrender.com/streamers=user1,user2.manifest.json
+https://kick-streams-stremio.onrender.com/streamers/user1,user2/manifest.json
 ```
 
 A fresh visitor to the configure page always starts with an empty list.

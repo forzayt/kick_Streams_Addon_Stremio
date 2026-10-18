@@ -364,7 +364,7 @@ async function buildCatalog(idPrefix, extra) {
   }));
 }
 
-// Build a catalog containing only the given slugs (used by /streamers=...manifest.json)
+// Build a catalog containing only the given slugs (used by /streamers/.../manifest.json)
 async function buildCatalogBySlugs(idPrefix, slugs) {
   const pinned = await Promise.all(
     slugs.map(async (slug) => {
@@ -576,7 +576,7 @@ app.get("/", (req, res) => {
     <p class="sub" style="margin-bottom:8px">Copy this link to install only your selected users:</p>
     <div class="urlbox" id="userManifestUrl"></div>
     <button class="copy-btn" type="button" onclick="copyManifestUrl()">📋 Copy manifest URL</button>
-    <p class="hint" style="margin-top:8px">URL format: <code>/streamers=user1,user2,etc.manifest.json</code></p>
+    <p class="hint" style="margin-top:8px">URL format: <code>/streamers/user1,user2,etc/manifest.json</code></p>
   </div>
 </div>
 <script>
@@ -601,7 +601,7 @@ app.get("/", (req, res) => {
       box.innerHTML='<span style="color:#94a3b8">Add at least one streamer to generate your URL.</span>';
       return;
     }
-    manifestUrl = location.origin + "/streamers=" + currentSlugs.join(",") + ".manifest.json";
+    manifestUrl = location.origin + "/streamers/" + currentSlugs.join(",") + "/manifest.json";
     box.innerHTML = '<a href="'+escapeHtml(manifestUrl)+'" target="_blank">'+escapeHtml(manifestUrl)+'</a>';
   }
   function copyManifestUrl(){
@@ -686,17 +686,17 @@ app.get("/", (req, res) => {
 });
 
 // -------------------------------------------------------------
-// User-specific manifest: /streamers=user1,user2,etc.manifest.json
+// User-specific manifest: /streamers/user1,user2,etc/manifest.json
 // Returns a manifest whose Favorites catalog shows only those users.
 // -------------------------------------------------------------
-app.get("/streamers=:slugs.manifest.json", (req, res) => {
+app.get("/streamers/:slugs/manifest.json", (req, res) => {
   const slugs = String(req.params.slugs)
     .split(/,/)
     .map(cleanSlug)
     .filter(Boolean);
 
   if (slugs.length === 0) {
-    return res.status(400).json({ error: "Provide /streamers=user1,user2,etc.manifest.json" });
+    return res.status(400).json({ error: "Provide /streamers/user1,user2,etc/manifest.json" });
   }
 
   const userManifest = {
