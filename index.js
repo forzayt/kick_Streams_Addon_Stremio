@@ -508,6 +508,7 @@ app.get("/", (req, res) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="https://kick.com/favicon.ico">
 <title>Configure Kick Streams Addon</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b0e0f;color:#fff;margin:0;padding:24px}
