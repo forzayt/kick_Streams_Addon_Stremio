@@ -6,16 +6,16 @@ Watch 100+ Kick live streams and recorded VODs directly inside Stremio (compatib
 
 **1. One-click install**
 
-[![Install to Stremio](https://img.shields.io/badge/Install%20to-Stremio-7b5bf5?style=for-the-badge)](stremio://zarranomma2996.alwaysdata.net/manifest.json)
+[![Install to Stremio](https://img.shields.io/badge/Install%20to-Stremio-7b5bf5?style=for-the-badge)](stremio://kick-streams-stremio.onrender.com/manifest.json)
 
-> If the button doesn't open Stremio, use the [Stremio Web install link](https://web.stremio.com/#/addons?addon=https%3A%2F%2Fzarranomma2996.alwaysdata.net%2Fmanifest.json) or the manifest link below.
+> If the button doesn't open Stremio, use the [Stremio Web install link](https://web.stremio.com/#/addons?addon=https%3A%2F%2Fkick-streams-stremio.onrender.com%2Fmanifest.json) or the manifest link below.
 
 **2. Manual install**
 
 Copy the manifest link and paste it into Stremio's Add-on search bar:
 
 ```
-    
+https://kick-streams-stremio.onrender.com/manifest.json
 ```
 
 ### Features
