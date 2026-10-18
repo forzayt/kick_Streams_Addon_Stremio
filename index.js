@@ -708,7 +708,6 @@ app.get("/streamers/:slugs/manifest.json", (req, res) => {
     types: ["kick"],
     idPrefixes: ["kick:", "kicklive:", "kickvod:"],
     catalogs: [
-      { type: "kick", id: "kick_channels", name: "Channels", extra: [{ name: "search", isRequired: false }] },
       { type: "kick", id: `kick_favorites:${slugs.join(",")}`, name: "Favorites" }
     ]
   };
