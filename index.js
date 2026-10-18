@@ -637,6 +637,12 @@ app.get("/", (req, res) => {
   ul{list-style:none;padding:0;margin:0}
   li{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #33414e;border-radius:8px;margin-bottom:8px;background:#0f1417}
   li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .added-list{display:flex;flex-direction:column;gap:8px}
+  .added-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #33414e;border-radius:8px;background:#0f1417}
+  .added-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff}
+  .added-remove{background:#33414e;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;flex-shrink:0}
+  .added-remove:hover{background:#53fc18;color:#000}
+  .added-empty{color:#94a3b8;font-size:13px;padding:10px 12px}
   .hint{color:#94a3b8;font-size:13px;margin-top:8px}
   .urlbox{background:#0f1417;border:1px solid #33414e;border-radius:8px;padding:12px;margin-top:10px;word-break:break-all;font-size:13px}
   .urlbox a{color:#53fc18;text-decoration:none}
@@ -663,6 +669,14 @@ app.get("/", (req, res) => {
   </div>
 
   <div class="card">
+    <h3>✅ Added streamers</h3>
+    <p class="sub" style="margin-bottom:10px">Click ⨉ to remove a streamer:</p>
+    <div class="added-list">
+      ${favorites.map(f => `<div class="added-item"><span class="added-name">${escapeHtml(f.name || f.slug)}</span><button class="added-remove" type="button" onclick="removeOne('${escapeHtml(f.slug)}')">⨉</button></div>`).join('') || '<div class="added-empty">No streamers added yet.</div>'}
+    </div>
+  </div>
+
+  <div class="card">
     <h3>Per-user manifest</h3>
     <p class="sub" style="margin-bottom:8px">Copy this link to install only your selected users:</p>
     <div class="urlbox" id="userManifestUrl"></div>
@@ -684,6 +698,11 @@ app.get("/", (req, res) => {
     const j=await r.json();
     msg.innerHTML='<div class="msg '+(j.ok?'ok':'err')+'">'+escapeHtml(j.message||'')+'</div>';
     if(j.ok){el.value='';setTimeout(()=>location.reload(),400);}
+  }
+  async function removeOne(slug){
+    const r=await fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=remove&slug='+encodeURIComponent(slug)});
+    const j=await r.json();
+    if(j.ok)location.reload();
   }
   updateUserManifest();
   // -------------------------------------------------------------
